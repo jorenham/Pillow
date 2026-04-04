@@ -52,6 +52,7 @@ if TYPE_CHECKING:
     from typing import IO, Literal
 
     from . import _imaging
+    from ._typing import Buffer
 
 
 class LoadingStrategy(IntEnum):
@@ -1193,7 +1194,7 @@ def getdata(
     class Collector(BytesIO):
         data = []
 
-        def write(self, data: bytes) -> int:  # type: ignore[override]
+        def write(self, data: Buffer) -> int:
             self.data.append(data)
             return len(data)
 
