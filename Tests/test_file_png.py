@@ -4,7 +4,7 @@ import re
 import sys
 import warnings
 import zlib
-from io import BytesIO
+from io import BytesIO, TextIOWrapper
 from pathlib import Path
 from types import ModuleType
 from typing import Any, cast
@@ -654,20 +654,16 @@ class TestFilePng:
         with pytest.raises(SyntaxError, match="Unknown compression method"):
             PngImagePlugin.PngImageFile("Tests/images/unknown_compression_method.png")
 
-    def test_padded_idat(self) -> None:
+    def test_padded_idat(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # This image has been manually hexedited
         # so that the IDAT chunk has padding at the end
         # Set MAXBLOCK to the length of the actual data
         # so that the decoder finishes reading before the chunk ends
-        MAXBLOCK = ImageFile.MAXBLOCK
-        ImageFile.MAXBLOCK = 45
-        ImageFile.LOAD_TRUNCATED_IMAGES = True
+        monkeypatch.setattr(ImageFile, "MAXBLOCK", 45)
+        monkeypatch.setattr(ImageFile, "LOAD_TRUNCATED_IMAGES", True)
 
         with Image.open("Tests/images/padded_idat.png") as im:
             im.load()
-
-            ImageFile.MAXBLOCK = MAXBLOCK
-            ImageFile.LOAD_TRUNCATED_IMAGES = False
 
             assert_image_equal_tofile(im, "Tests/images/bw_gradient.png")
 
@@ -710,6 +706,16 @@ class TestFilePng:
             assert reloaded.png is not None
             assert reloaded.png.im_palette is not None
             assert len(reloaded.png.im_palette[1]) == 3
+
+    def test_plte_cmyk(self, tmp_path: Path) -> None:
+        im = Image.new("P", (1, 1))
+        im.putpalette((0, 100, 150, 200), "CMYK")
+
+        out = tmp_path / "temp.png"
+        im.save(out)
+
+        with Image.open(out) as reloaded:
+            assert reloaded.convert("CMYK").getpixel((0, 0)) == (200, 222, 232, 0)
 
     def test_getxmp(self) -> None:
         with Image.open("Tests/images/color_snakes.png") as im:
@@ -815,19 +821,15 @@ class TestFilePng:
     @pytest.mark.parametrize("buffer", (True, False))
     def test_save_stdout(self, buffer: bool, monkeypatch: pytest.MonkeyPatch) -> None:
 
-        class MyStdOut:
-            buffer = BytesIO()
-
-        mystdout: MyStdOut | BytesIO = MyStdOut() if buffer else BytesIO()
+        fp = BytesIO()
+        mystdout = TextIOWrapper(fp) if buffer else fp
 
         monkeypatch.setattr(sys, "stdout", mystdout)
 
         with Image.open(TEST_PNG_FILE) as im:
             im.save(sys.stdout, "PNG")  # type: ignore[arg-type]
 
-        if isinstance(mystdout, MyStdOut):
-            mystdout = mystdout.buffer
-        with Image.open(mystdout) as reloaded:
+        with Image.open(fp) as reloaded:
             assert_image_equal_tofile(reloaded, TEST_PNG_FILE)
 
     def test_truncated_end_chunk(self, monkeypatch: pytest.MonkeyPatch) -> None:

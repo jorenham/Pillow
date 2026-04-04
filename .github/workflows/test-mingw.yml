@@ -28,6 +28,7 @@ concurrency:
 
 env:
   COVERAGE_CORE: sysmon
+  FORCE_COLOR: 1
 
 jobs:
   build:
@@ -86,7 +87,7 @@ jobs:
           .ci/test.sh
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v6
         with:
           files: ./coverage.xml
           flags: GHA_Windows
